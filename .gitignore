@@ -27,3 +27,9 @@ output/*.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Project docs (local only)
+PRD.md
+ROADMAP.md
+CLAUDE.md
+.claude/
