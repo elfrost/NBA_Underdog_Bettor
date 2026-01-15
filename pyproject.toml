@@ -1,6 +1,6 @@
 [project]
 name = "nba-underdog-bet"
-version = "0.1.0"
+version = "0.2.0"
 description = "AI-powered NBA underdog betting analysis system"
 requires-python = ">=3.11"
 dependencies = [
