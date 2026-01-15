@@ -12,6 +12,7 @@ from src.models.schemas import BetType, UnderdogPick, BetRecommendation
 from src.utils import find_odds_for_game, export_recommendations_to_csv
 from src.db import get_db, PickRecord
 from src.notifications import send_pick_notification, Notifier
+from src.bankroll import get_bankroll_manager
 
 
 console = Console()
@@ -47,10 +48,10 @@ def save_pick_to_db(reco: BetRecommendation) -> int | None:
         expected_value=reco.expected_value,
         should_bet=reco.should_bet,
         underdog_b2b=pick.underdog_context.is_back_to_back,
-        underdog_rest=pick.underdog_context.rest_days,
+        underdog_rest=pick.underdog_context.days_rest,
         underdog_form=pick.underdog_context.recent_form,
         favorite_b2b=pick.favorite_context.is_back_to_back,
-        favorite_rest=pick.favorite_context.rest_days,
+        favorite_rest=pick.favorite_context.days_rest,
         favorite_form=pick.favorite_context.recent_form,
     )
 
@@ -74,6 +75,10 @@ async def main():
 
     console.print("[bold blue]NBA Underdog Betting Analysis[/bold blue]")
     console.print(f"Date: {datetime.now().strftime('%Y-%m-%d')}\n")
+
+    # Display bankroll status
+    bankroll_mgr = get_bankroll_manager()
+    console.print(bankroll_mgr.format_status())
 
     # Initialize clients
     bdl_client = BallDontLieClient(
@@ -192,8 +197,12 @@ async def main():
 def display_recommendations(recommendations: list):
     """Display recommendations in a formatted table."""
     settings = get_settings()
+    bankroll_mgr = get_bankroll_manager()
+    ctx = bankroll_mgr.get_bankroll_context()
+    risk_emoji = {"crisis": "🚨", "cautious": "⚠️", "normal": "✅", "aggressive": "🔥"}
+    risk = ctx["risk_level"].value
 
-    table = Table(title=f"Underdog Recommendations (Bankroll: ${settings.bankroll:,.0f})")
+    table = Table(title=f"Underdog Recommendations | ${settings.bankroll:,.0f} | {risk_emoji.get(risk, '')} {risk.upper()} | Kelly {ctx['dynamic_kelly']:.0%}")
 
     table.add_column("Game", style="cyan")
     table.add_column("Pick", style="green")
@@ -246,6 +255,7 @@ def display_recommendations(recommendations: list):
     console.print(f"\n[bold]Summary:[/bold] {len(actionable)}/{len(recommendations)} bets recommended")
     console.print(f"Total exposure: {total_exposure:.1f}% (${total_amount:.0f})")
     console.print(f"Total expected value: [{'green' if total_ev > 0 else 'red'}]${total_ev:+.2f}[/]")
+    console.print(f"[dim]Dynamic Kelly: {ctx['dynamic_kelly']:.0%} of base (Risk: {risk.upper()})[/dim]")
 
     # Detailed analysis
     console.print("\n[bold]Detailed Analysis:[/bold]\n")

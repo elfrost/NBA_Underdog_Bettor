@@ -14,6 +14,7 @@ from src.utils.kelly import calculate_bet_sizing
 from src.memory import get_history
 from src.stats.ratings import TeamRatings, calculate_team_ratings, get_matchup_analysis
 from src.stats.simulator import MonteCarloSimulator
+from src.bankroll import get_bankroll_manager
 from config import get_settings
 
 
@@ -153,12 +154,16 @@ Consider your historical performance when assessing confidence level.
         result = await self.agent.run(context)
         reco = result.output
 
-        # Apply Kelly Criterion sizing
+        # Get dynamic Kelly fraction from bankroll manager
+        bankroll_mgr = get_bankroll_manager()
+        dynamic_kelly = bankroll_mgr.calculate_dynamic_kelly()
+
+        # Apply Kelly Criterion sizing with dynamic adjustment
         kelly_result = calculate_bet_sizing(
             american_odds=pick.odds,
             confidence=reco.confidence,
             bankroll=self.settings.bankroll,
-            kelly_fraction=self.settings.kelly_fraction,
+            kelly_fraction=dynamic_kelly,
             max_bet_pct=self.settings.max_bet_pct,
             min_bet_pct=self.settings.min_bet_pct,
         )
