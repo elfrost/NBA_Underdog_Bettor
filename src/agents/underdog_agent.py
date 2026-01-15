@@ -11,6 +11,7 @@ from src.models.schemas import (
     UnderdogPick,
 )
 from src.utils.kelly import calculate_bet_sizing
+from src.memory import get_history
 from config import get_settings
 
 
@@ -26,6 +27,13 @@ Key principles:
 3. Value road underdogs in the +3.5 to +7.5 spread range
 4. Moneyline underdogs +150 to +300 offer best risk/reward
 5. Be conservative - only recommend bets with clear edges
+6. Learn from your betting history - avoid patterns that led to losses
+7. If you have a losing streak, be more selective; if winning, maintain discipline
+
+You will receive your historical betting performance. Use this to:
+- Adjust confidence based on your track record with similar bets
+- Recognize patterns (certain teams, bet types, situations) where you perform well or poorly
+- Be honest about your edge estimation
 
 Analyze the provided game context and output a structured recommendation.
 Be specific about WHY this underdog has value, citing concrete factors."""
@@ -46,12 +54,12 @@ Be specific about WHY this underdog has value, citing concrete factors."""
         )
         self.settings = settings
 
-    def _format_context(self, pick: UnderdogPick) -> str:
+    def _format_context(self, pick: UnderdogPick, historical_context: str = "") -> str:
         """Format pick context for AI analysis."""
         uc = pick.underdog_context
         fc = pick.favorite_context
 
-        return f"""
+        context = f"""
 GAME: {pick.game.away_team.name} @ {pick.game.home_team.name}
 DATE: {pick.game.date.strftime("%Y-%m-%d %H:%M")}
 
@@ -71,12 +79,27 @@ FAVORITE: {pick.favorite.name}
 - Key injuries: {', '.join(fc.injuries) if fc.injuries else 'None reported'}
 
 BET TYPE: {pick.bet_type.value.upper()}
-Analyze this underdog opportunity and provide your recommendation.
 """
+
+        if historical_context:
+            context += f"""
+{historical_context}
+"""
+
+        context += """
+Analyze this underdog opportunity and provide your recommendation.
+Consider your historical performance when assessing confidence level.
+"""
+        return context
 
     async def analyze_pick(self, pick: UnderdogPick) -> BetRecommendation:
         """Analyze an underdog pick and generate recommendation."""
-        context = self._format_context(pick)
+        # Get historical context for this underdog
+        history = get_history()
+        hist_context = history.get_historical_context(team=pick.underdog.abbreviation)
+        hist_str = hist_context.format_for_prompt()
+
+        context = self._format_context(pick, historical_context=hist_str)
         result = await self.agent.run(context)
         reco = result.output
 
