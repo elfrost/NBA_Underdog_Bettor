@@ -70,7 +70,7 @@ class TelegramNotifier:
 
 <i>{reco.reasoning[:300]}...</i>
 
-<code>NBA Underdog Bet v0.4.0</code>
+<code>NBA Underdog Bet v0.5.0</code>
 """
         return message.strip()
 

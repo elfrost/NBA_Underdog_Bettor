@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import httpx
 
 from src.models.schemas import Team, Game, TeamContext
+from src.stats.ratings import calculate_team_ratings
 
 
 class BallDontLieClient:
@@ -178,10 +179,28 @@ class BallDontLieClient:
             if inj.get("player", {}).get("team", {}).get("id") == team.id
         ]
 
+        # Calculate advanced ratings
+        ratings = calculate_team_ratings(team, recent_games)
+
+        # Recent form string (W/L sequence)
+        form_results = []
+        for g in completed[:5]:
+            is_home = g.home_team.id == team.id
+            team_score = g.home_score if is_home else g.away_score
+            opp_score = g.away_score if is_home else g.home_score
+            form_results.append("W" if team_score > opp_score else "L")
+        recent_form = "-".join(form_results) if form_results else ""
+
         return TeamContext(
             team=team,
             is_back_to_back=is_b2b,
             days_rest=days_rest,
             recent_record=recent_record,
-            injuries=team_injuries[:5],  # Limit to top 5
+            recent_form=recent_form,
+            injuries=team_injuries[:5],
+            offensive_rating=ratings.offensive_rating,
+            defensive_rating=ratings.defensive_rating,
+            net_rating=ratings.net_rating,
+            pace=ratings.pace,
+            points_per_game=ratings.points_per_game,
         )

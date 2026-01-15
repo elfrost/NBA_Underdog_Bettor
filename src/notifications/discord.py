@@ -95,6 +95,16 @@ class DiscordNotifier:
                     "inline": True,
                 },
                 {
+                    "name": "Sim Win/Cover",
+                    "value": f"{reco.sim_win_pct:.0%} / {reco.sim_cover_pct:.0%}",
+                    "inline": True,
+                },
+                {
+                    "name": "Sim Margin",
+                    "value": f"{reco.sim_avg_margin:+.1f}",
+                    "inline": True,
+                },
+                {
                     "name": "Kelly Bet",
                     "value": bet_str,
                     "inline": True,
@@ -121,7 +131,7 @@ class DiscordNotifier:
                 },
             ],
             "footer": {
-                "text": f"NBA Underdog Bet v0.4.0 | {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                "text": f"NBA Underdog Bet v0.5.0 | {datetime.now().strftime('%Y-%m-%d %H:%M')}"
             },
         }
 

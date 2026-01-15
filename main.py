@@ -200,6 +200,7 @@ def display_recommendations(recommendations: list):
     table.add_column("Type", style="blue")
     table.add_column("Line", style="yellow")
     table.add_column("Confidence", style="magenta")
+    table.add_column("Sim Win/Cover", style="white")
     table.add_column("Kelly Bet", style="white")
     table.add_column("EV", style="cyan")
 
@@ -219,12 +220,16 @@ def display_recommendations(recommendations: list):
         ev_color = "green" if reco.expected_value > 0 else "red"
         ev_str = f"[{ev_color}]${reco.expected_value:+.2f}[/{ev_color}]"
 
+        # Simulation display
+        sim_str = f"{reco.sim_win_pct:.0%}/{reco.sim_cover_pct:.0%}"
+
         table.add_row(
             game_str,
             pick.underdog.abbreviation,
             pick.bet_type.value.upper(),
             line_str,
             f"[{conf_color}]{reco.confidence.value.upper()}[/{conf_color}]",
+            sim_str,
             kelly_str,
             ev_str,
         )
@@ -249,6 +254,8 @@ def display_recommendations(recommendations: list):
         bet_status = "[green]BET[/green]" if reco.should_bet else "[red]PASS[/red]"
         console.print(f"[bold cyan]{pick.underdog.name}[/bold cyan] ({pick.bet_type.value}) - {bet_status}")
         console.print(f"[yellow]Kelly:[/yellow] Implied {reco.implied_prob:.1%} | Est. {reco.estimated_prob:.1%} | Bet {reco.bankroll_pct:.1f}%")
+        console.print(f"[blue]Simulation:[/blue] Win {reco.sim_win_pct:.0%} | Cover {reco.sim_cover_pct:.0%} | Margin {reco.sim_avg_margin:+.1f}")
+        console.print(f"[magenta]Stats:[/magenta] {pick.underdog.abbreviation} Net {pick.underdog_context.net_rating:+.1f} vs {pick.favorite.abbreviation} Net {pick.favorite_context.net_rating:+.1f}")
         console.print(f"[green]Edge factors:[/green] {', '.join(reco.edge_factors)}")
         console.print(f"[red]Risk factors:[/red] {', '.join(reco.risk_factors)}")
         console.print(f"[white]Reasoning:[/white] {reco.reasoning}\n")

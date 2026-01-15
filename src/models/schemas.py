@@ -58,7 +58,15 @@ class TeamContext(BaseModel):
     is_back_to_back: bool = False
     days_rest: int = 1
     recent_record: str = ""  # e.g., "3-2 L5"
+    recent_form: str = ""  # e.g., "W-W-L-W-L"
     injuries: list[str] = Field(default_factory=list)
+
+    # Advanced stats (v0.5.0)
+    offensive_rating: float = 0.0
+    defensive_rating: float = 0.0
+    net_rating: float = 0.0
+    pace: float = 100.0
+    points_per_game: float = 0.0
 
 
 class UnderdogPick(BaseModel):
@@ -88,3 +96,9 @@ class BetRecommendation(BaseModel):
     bet_amount: float = 0.0
     expected_value: float = 0.0
     should_bet: bool = False
+
+    # Simulation fields (v0.5.0)
+    sim_win_pct: float = 0.0
+    sim_cover_pct: float = 0.0
+    sim_avg_margin: float = 0.0
+    sim_ev: float = 0.0

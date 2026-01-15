@@ -46,15 +46,29 @@ def export_recommendations_to_csv(
             "implied_prob": reco.implied_prob,
             "estimated_prob": reco.estimated_prob,
             "expected_value": reco.expected_value,
+            # Simulation data (v0.5.0)
+            "sim_win_pct": reco.sim_win_pct,
+            "sim_cover_pct": reco.sim_cover_pct,
+            "sim_avg_margin": reco.sim_avg_margin,
+            "sim_ev": reco.sim_ev,
             "edge_factors": "; ".join(reco.edge_factors),
             "risk_factors": "; ".join(reco.risk_factors),
             "reasoning": reco.reasoning,
             "underdog_b2b": pick.underdog_context.is_back_to_back,
             "underdog_rest": pick.underdog_context.days_rest,
             "underdog_form": pick.underdog_context.recent_record,
+            # Advanced stats (v0.5.0)
+            "underdog_off_rtg": pick.underdog_context.offensive_rating,
+            "underdog_def_rtg": pick.underdog_context.defensive_rating,
+            "underdog_net_rtg": pick.underdog_context.net_rating,
+            "underdog_pace": pick.underdog_context.pace,
             "favorite_b2b": pick.favorite_context.is_back_to_back,
             "favorite_rest": pick.favorite_context.days_rest,
             "favorite_form": pick.favorite_context.recent_record,
+            "favorite_off_rtg": pick.favorite_context.offensive_rating,
+            "favorite_def_rtg": pick.favorite_context.defensive_rating,
+            "favorite_net_rtg": pick.favorite_context.net_rating,
+            "favorite_pace": pick.favorite_context.pace,
         })
 
     # Create DataFrame

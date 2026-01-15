@@ -12,6 +12,8 @@ from src.models.schemas import (
 )
 from src.utils.kelly import calculate_bet_sizing
 from src.memory import get_history
+from src.stats.ratings import TeamRatings, calculate_team_ratings, get_matchup_analysis
+from src.stats.simulator import MonteCarloSimulator
 from config import get_settings
 
 
@@ -54,7 +56,7 @@ Be specific about WHY this underdog has value, citing concrete factors."""
         )
         self.settings = settings
 
-    def _format_context(self, pick: UnderdogPick, historical_context: str = "") -> str:
+    def _format_context(self, pick: UnderdogPick, historical_context: str = "", simulation_context: str = "") -> str:
         """Format pick context for AI analysis."""
         uc = pick.underdog_context
         fc = pick.favorite_context
@@ -69,16 +71,25 @@ UNDERDOG: {pick.underdog.name}
 - Odds: {'+' if pick.odds > 0 else ''}{pick.odds}
 - Rest days: {uc.days_rest}
 - Back-to-back: {'YES' if uc.is_back_to_back else 'No'}
-- Recent form: {uc.recent_record}
+- Recent form: {uc.recent_record} ({uc.recent_form})
+- Stats: Off {uc.offensive_rating:.1f}, Def {uc.defensive_rating:.1f}, Net {uc.net_rating:+.1f}, Pace {uc.pace:.1f}
+- PPG: {uc.points_per_game:.1f}
 - Key injuries: {', '.join(uc.injuries) if uc.injuries else 'None reported'}
 
 FAVORITE: {pick.favorite.name}
 - Rest days: {fc.days_rest}
 - Back-to-back: {'YES' if fc.is_back_to_back else 'No'}
-- Recent form: {fc.recent_record}
+- Recent form: {fc.recent_record} ({fc.recent_form})
+- Stats: Off {fc.offensive_rating:.1f}, Def {fc.defensive_rating:.1f}, Net {fc.net_rating:+.1f}, Pace {fc.pace:.1f}
+- PPG: {fc.points_per_game:.1f}
 - Key injuries: {', '.join(fc.injuries) if fc.injuries else 'None reported'}
 
 BET TYPE: {pick.bet_type.value.upper()}
+"""
+
+        if simulation_context:
+            context += f"""
+{simulation_context}
 """
 
         if historical_context:
@@ -88,6 +99,7 @@ BET TYPE: {pick.bet_type.value.upper()}
 
         context += """
 Analyze this underdog opportunity and provide your recommendation.
+Use the advanced stats and simulation data to inform your confidence level.
 Consider your historical performance when assessing confidence level.
 """
         return context
@@ -99,7 +111,45 @@ Consider your historical performance when assessing confidence level.
         hist_context = history.get_historical_context(team=pick.underdog.abbreviation)
         hist_str = hist_context.format_for_prompt()
 
-        context = self._format_context(pick, historical_context=hist_str)
+        # Build team ratings for simulation
+        uc = pick.underdog_context
+        fc = pick.favorite_context
+
+        underdog_ratings = TeamRatings(
+            team=pick.underdog.abbreviation,
+            games_played=5,
+            points_per_game=uc.points_per_game,
+            offensive_rating=uc.offensive_rating,
+            defensive_rating=uc.defensive_rating,
+            net_rating=uc.net_rating,
+            pace=uc.pace,
+        )
+
+        favorite_ratings = TeamRatings(
+            team=pick.favorite.abbreviation,
+            games_played=5,
+            points_per_game=fc.points_per_game,
+            offensive_rating=fc.offensive_rating,
+            defensive_rating=fc.defensive_rating,
+            net_rating=fc.net_rating,
+            pace=fc.pace,
+        )
+
+        # Run Monte Carlo simulation
+        simulator = MonteCarloSimulator(simulations=1000)
+        is_underdog_home = pick.game.home_team.id == pick.underdog.id
+        spread = pick.line if pick.bet_type == BetType.SPREAD else 0
+
+        sim_result = simulator.simulate_game(
+            underdog_ratings=underdog_ratings,
+            favorite_ratings=favorite_ratings,
+            spread=spread,
+            is_underdog_home=is_underdog_home,
+        )
+
+        sim_context = sim_result.format_for_prompt()
+
+        context = self._format_context(pick, historical_context=hist_str, simulation_context=sim_context)
         result = await self.agent.run(context)
         reco = result.output
 
@@ -120,6 +170,12 @@ Consider your historical performance when assessing confidence level.
         reco.bet_amount = kelly_result["bet_amount"]
         reco.expected_value = kelly_result["expected_value"]
         reco.should_bet = kelly_result["should_bet"]
+
+        # Add simulation results
+        reco.sim_win_pct = sim_result.underdog_win_pct
+        reco.sim_cover_pct = sim_result.underdog_cover_pct
+        reco.sim_avg_margin = sim_result.avg_margin
+        reco.sim_ev = simulator.calculate_ev(sim_result, spread, pick.odds, reco.bet_amount)
 
         return reco
 
