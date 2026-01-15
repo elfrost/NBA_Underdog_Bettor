@@ -8,11 +8,52 @@ from rich.table import Table
 from config import get_settings
 from src.api import BallDontLieClient, OddsAPIClient
 from src.agents import UnderdogAgent
-from src.models.schemas import BetType, UnderdogPick
+from src.models.schemas import BetType, UnderdogPick, BetRecommendation
 from src.utils import find_odds_for_game, export_recommendations_to_csv
+from src.db import get_db, PickRecord
 
 
 console = Console()
+
+
+def save_pick_to_db(reco: BetRecommendation) -> int | None:
+    """Save a pick to the database. Returns pick ID or None if not saved."""
+    pick = reco.pick
+
+    # Only save HIGH and MEDIUM confidence picks
+    if reco.confidence.value == "low":
+        return None
+
+    db = get_db()
+    record = PickRecord(
+        game_date=pick.game.date,
+        game_id=pick.game.id,
+        home_team=pick.game.home_team.abbreviation,
+        away_team=pick.game.away_team.abbreviation,
+        underdog=pick.underdog.abbreviation,
+        favorite=pick.favorite.abbreviation,
+        bet_type=pick.bet_type.value.upper(),
+        line=pick.line,
+        odds=pick.odds,
+        confidence=reco.confidence.value,
+        edge_factors=", ".join(reco.edge_factors),
+        risk_factors=", ".join(reco.risk_factors),
+        reasoning=reco.reasoning,
+        implied_prob=reco.implied_prob,
+        estimated_prob=reco.estimated_prob,
+        bankroll_pct=reco.bankroll_pct,
+        bet_amount=reco.bet_amount,
+        expected_value=reco.expected_value,
+        should_bet=reco.should_bet,
+        underdog_b2b=pick.underdog_context.is_back_to_back,
+        underdog_rest=pick.underdog_context.rest_days,
+        underdog_form=pick.underdog_context.recent_form,
+        favorite_b2b=pick.favorite_context.is_back_to_back,
+        favorite_rest=pick.favorite_context.rest_days,
+        favorite_form=pick.favorite_context.recent_form,
+    )
+
+    return db.save_pick(record)
 
 
 async def main():
@@ -113,12 +154,21 @@ async def main():
                 reco = await agent.analyze_pick(pick)
                 recommendations.append(reco)
 
+                # Save to database (HIGH/MEDIUM confidence only)
+                pick_id = save_pick_to_db(reco)
+                if pick_id:
+                    console.print(f"[dim]Saved to DB (ID: {pick_id})[/dim]")
+
         # Display results
         if recommendations:
             display_recommendations(recommendations)
             # Export to CSV
             csv_path = export_recommendations_to_csv(recommendations)
             console.print(f"\n[green]Picks exported to: {csv_path}[/green]")
+
+            # Database summary
+            saved_count = sum(1 for r in recommendations if r.confidence.value != "low")
+            console.print(f"[blue]Saved to database: {saved_count} picks (HIGH/MEDIUM confidence)[/blue]")
         else:
             console.print("\n[yellow]No underdog opportunities matched filters today.[/yellow]")
 

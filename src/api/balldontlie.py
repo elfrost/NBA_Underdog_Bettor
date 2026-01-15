@@ -71,6 +71,34 @@ class BallDontLieClient:
             ))
         return games
 
+    async def get_game_by_id(self, game_id: int) -> Game | None:
+        """Fetch a specific game by ID."""
+        response = await self._client.get(f"/games/{game_id}")
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        g = response.json()["data"]
+
+        home = Team(
+            id=g["home_team"]["id"],
+            name=g["home_team"]["full_name"],
+            abbreviation=g["home_team"]["abbreviation"],
+        )
+        away = Team(
+            id=g["visitor_team"]["id"],
+            name=g["visitor_team"]["full_name"],
+            abbreviation=g["visitor_team"]["abbreviation"],
+        )
+        return Game(
+            id=g["id"],
+            date=datetime.fromisoformat(g["date"].replace("Z", "+00:00")),
+            home_team=home,
+            away_team=away,
+            status=g["status"],
+            home_score=g.get("home_team_score"),
+            away_score=g.get("visitor_team_score"),
+        )
+
     async def get_team_recent_games(self, team_id: int, days: int = 7) -> list[Game]:
         """Fetch recent games for a team to check B2B and form."""
         end_date = datetime.now()
