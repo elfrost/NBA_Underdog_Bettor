@@ -81,3 +81,10 @@ class BetRecommendation(BaseModel):
     edge_factors: list[str] = Field(default_factory=list)
     risk_factors: list[str] = Field(default_factory=list)
     suggested_units: float = 1.0
+    # Kelly Criterion fields (populated post-AI analysis)
+    implied_prob: float = 0.0
+    estimated_prob: float = 0.0
+    bankroll_pct: float = 0.0
+    bet_amount: float = 0.0
+    expected_value: float = 0.0
+    should_bet: bool = False

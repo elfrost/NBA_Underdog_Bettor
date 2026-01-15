@@ -5,11 +5,12 @@
 | Version | Focus | Status |
 |---------|-------|--------|
 | v0.1.0 | MVP - Fetch, Analyse, Export | Done |
+| v0.1.5 | Kelly Criterion Sizing | Done |
 | v0.2.0 | Result Tracking | Next |
 | v0.3.0 | Agent Memory | Planned |
 | v0.4.0 | Notifications | Planned |
 | v0.5.0 | Advanced Stats + Simulator | Planned |
-| v0.6.0 | AI Master Bettor | Planned |
+| v0.6.0 | AI Master Bettor (Full) | Planned |
 
 ---
 
@@ -23,6 +24,32 @@
 - Team matching robuste
 - Detection B2B et rest days
 - Player injuries
+
+---
+
+## v0.1.5 - Kelly Criterion Sizing (Done)
+
+**Objectif**: Sizing intelligent des mises basé sur Kelly Criterion
+
+**Features:**
+- Calcul Kelly Criterion (`f* = (bp - q) / b`)
+- Quarter Kelly par défaut (0.25) pour réduire variance
+- Cap 5% max bankroll par bet
+- Min 0.5% pour éviter micro-bets
+- Edge estimation: +8% HIGH, +4% MEDIUM, 0% LOW
+- Expected Value (EV) calculation
+- Display amélioré: "2.3% ($23)" au lieu de "2 units"
+
+**Config (.env):**
+- `BANKROLL=1000.0`
+- `KELLY_FRACTION=0.25`
+- `MAX_BET_PCT=0.05`
+- `MIN_BET_PCT=0.005`
+
+**Livrables:**
+- `src/utils/kelly.py`
+- BetRecommendation enrichi avec Kelly data
+- CSV export avec colonnes Kelly
 
 ---
 

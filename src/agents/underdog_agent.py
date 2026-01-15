@@ -10,6 +10,7 @@ from src.models.schemas import (
     Odds,
     UnderdogPick,
 )
+from src.utils.kelly import calculate_bet_sizing
 from config import get_settings
 
 
@@ -77,7 +78,27 @@ Analyze this underdog opportunity and provide your recommendation.
         """Analyze an underdog pick and generate recommendation."""
         context = self._format_context(pick)
         result = await self.agent.run(context)
-        return result.output
+        reco = result.output
+
+        # Apply Kelly Criterion sizing
+        kelly_result = calculate_bet_sizing(
+            american_odds=pick.odds,
+            confidence=reco.confidence,
+            bankroll=self.settings.bankroll,
+            kelly_fraction=self.settings.kelly_fraction,
+            max_bet_pct=self.settings.max_bet_pct,
+            min_bet_pct=self.settings.min_bet_pct,
+        )
+
+        # Update recommendation with Kelly data
+        reco.implied_prob = kelly_result["implied_prob"]
+        reco.estimated_prob = kelly_result["estimated_prob"]
+        reco.bankroll_pct = kelly_result["final_bet_pct"]
+        reco.bet_amount = kelly_result["bet_amount"]
+        reco.expected_value = kelly_result["expected_value"]
+        reco.should_bet = kelly_result["should_bet"]
+
+        return reco
 
     def filter_underdog(self, odds: Odds, bet_type: BetType) -> bool:
         """Check if underdog meets filter criteria."""

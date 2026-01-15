@@ -129,14 +129,17 @@ async def main():
 
 def display_recommendations(recommendations: list):
     """Display recommendations in a formatted table."""
-    table = Table(title="Underdog Recommendations")
+    settings = get_settings()
+
+    table = Table(title=f"Underdog Recommendations (Bankroll: ${settings.bankroll:,.0f})")
 
     table.add_column("Game", style="cyan")
     table.add_column("Pick", style="green")
     table.add_column("Type", style="blue")
     table.add_column("Line", style="yellow")
     table.add_column("Confidence", style="magenta")
-    table.add_column("Units", style="white")
+    table.add_column("Kelly Bet", style="white")
+    table.add_column("EV", style="cyan")
 
     for reco in recommendations:
         pick = reco.pick
@@ -144,23 +147,46 @@ def display_recommendations(recommendations: list):
         line_str = f"{'+' if pick.line > 0 else ''}{pick.line}"
         conf_color = {"low": "red", "medium": "yellow", "high": "green"}[reco.confidence.value]
 
+        # Kelly bet display
+        if reco.should_bet:
+            kelly_str = f"{reco.bankroll_pct:.1f}% (${reco.bet_amount:.0f})"
+        else:
+            kelly_str = "[dim]PASS[/dim]"
+
+        # EV display
+        ev_color = "green" if reco.expected_value > 0 else "red"
+        ev_str = f"[{ev_color}]${reco.expected_value:+.2f}[/{ev_color}]"
+
         table.add_row(
             game_str,
             pick.underdog.abbreviation,
             pick.bet_type.value.upper(),
             line_str,
             f"[{conf_color}]{reco.confidence.value.upper()}[/{conf_color}]",
-            str(reco.suggested_units),
+            kelly_str,
+            ev_str,
         )
 
     console.print("\n")
     console.print(table)
 
+    # Summary of actionable bets
+    actionable = [r for r in recommendations if r.should_bet]
+    total_exposure = sum(r.bankroll_pct for r in actionable)
+    total_amount = sum(r.bet_amount for r in actionable)
+    total_ev = sum(r.expected_value for r in actionable)
+
+    console.print(f"\n[bold]Summary:[/bold] {len(actionable)}/{len(recommendations)} bets recommended")
+    console.print(f"Total exposure: {total_exposure:.1f}% (${total_amount:.0f})")
+    console.print(f"Total expected value: [{'green' if total_ev > 0 else 'red'}]${total_ev:+.2f}[/]")
+
     # Detailed analysis
     console.print("\n[bold]Detailed Analysis:[/bold]\n")
     for reco in recommendations:
         pick = reco.pick
-        console.print(f"[bold cyan]{pick.underdog.name}[/bold cyan] ({pick.bet_type.value})")
+        bet_status = "[green]BET[/green]" if reco.should_bet else "[red]PASS[/red]"
+        console.print(f"[bold cyan]{pick.underdog.name}[/bold cyan] ({pick.bet_type.value}) - {bet_status}")
+        console.print(f"[yellow]Kelly:[/yellow] Implied {reco.implied_prob:.1%} | Est. {reco.estimated_prob:.1%} | Bet {reco.bankroll_pct:.1f}%")
         console.print(f"[green]Edge factors:[/green] {', '.join(reco.edge_factors)}")
         console.print(f"[red]Risk factors:[/red] {', '.join(reco.risk_factors)}")
         console.print(f"[white]Reasoning:[/white] {reco.reasoning}\n")

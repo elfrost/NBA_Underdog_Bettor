@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     # Analysis settings
     lookback_days: int = 7  # For recent form analysis
 
+    # Kelly Criterion / Bankroll settings
+    bankroll: float = 1000.0  # Total bankroll in dollars
+    kelly_fraction: float = 0.25  # Quarter Kelly (conservative)
+    max_bet_pct: float = 0.05  # Max 5% of bankroll per bet
+    min_bet_pct: float = 0.005  # Min 0.5% ($5 on $1000) to bet
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
