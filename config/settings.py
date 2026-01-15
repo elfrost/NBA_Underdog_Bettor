@@ -35,6 +35,17 @@ class Settings(BaseSettings):
     max_bet_pct: float = 0.05  # Max 5% of bankroll per bet
     min_bet_pct: float = 0.005  # Min 0.5% ($5 on $1000) to bet
 
+    # Notifications
+    notifications_enabled: bool = True
+    notify_high_only: bool = True  # Only notify for HIGH confidence picks
+
+    # Discord
+    discord_webhook_url: str = ""
+
+    # Telegram (future)
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

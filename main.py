@@ -11,6 +11,7 @@ from src.agents import UnderdogAgent
 from src.models.schemas import BetType, UnderdogPick, BetRecommendation
 from src.utils import find_odds_for_game, export_recommendations_to_csv
 from src.db import get_db, PickRecord
+from src.notifications import send_pick_notification, Notifier
 
 
 console = Console()
@@ -159,6 +160,11 @@ async def main():
                 if pick_id:
                     console.print(f"[dim]Saved to DB (ID: {pick_id})[/dim]")
 
+                # Send notification (HIGH confidence by default)
+                notif_result = send_pick_notification(reco)
+                if notif_result.get("discord") or notif_result.get("telegram"):
+                    console.print(f"[dim]Notification sent[/dim]")
+
         # Display results
         if recommendations:
             display_recommendations(recommendations)
@@ -169,6 +175,12 @@ async def main():
             # Database summary
             saved_count = sum(1 for r in recommendations if r.confidence.value != "low")
             console.print(f"[blue]Saved to database: {saved_count} picks (HIGH/MEDIUM confidence)[/blue]")
+
+            # Notifications summary
+            notifier = Notifier()
+            if notifier.has_channels:
+                notified = sum(1 for r in recommendations if notifier.should_notify(r))
+                console.print(f"[magenta]Notifications sent: {notified} picks (HIGH confidence)[/magenta]")
         else:
             console.print("\n[yellow]No underdog opportunities matched filters today.[/yellow]")
 
