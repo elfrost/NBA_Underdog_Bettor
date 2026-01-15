@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(claude mcp add:*)",
+      "Bash(mkdir:*)",
+      "Bash(pip install:*)",
+      "Bash(python -c:*)",
+      "Bash(python main.py:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)"
+    ]
+  }
+}

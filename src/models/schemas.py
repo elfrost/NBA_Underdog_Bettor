@@ -1,0 +1,83 @@
+"""Pydantic schemas for NBA betting data."""
+
+from datetime import datetime
+from enum import Enum
+from pydantic import BaseModel, Field
+
+
+class BetType(str, Enum):
+    """Type of bet."""
+    SPREAD = "spread"
+    MONEYLINE = "moneyline"
+
+
+class Confidence(str, Enum):
+    """Confidence level for picks."""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class Team(BaseModel):
+    """NBA Team."""
+    id: int
+    name: str
+    abbreviation: str
+    conference: str | None = None
+    division: str | None = None
+
+
+class Game(BaseModel):
+    """NBA Game information."""
+    id: int
+    date: datetime
+    home_team: Team
+    away_team: Team
+    status: str = "scheduled"
+    home_score: int | None = None
+    away_score: int | None = None
+
+
+class Odds(BaseModel):
+    """Betting odds for a game."""
+    game_id: int
+    bookmaker: str
+    home_spread: float
+    away_spread: float
+    home_spread_odds: int
+    away_spread_odds: int
+    home_ml: int
+    away_ml: int
+    total: float | None = None
+    timestamp: datetime = Field(default_factory=datetime.now)
+
+
+class TeamContext(BaseModel):
+    """Context about a team for analysis."""
+    team: Team
+    is_back_to_back: bool = False
+    days_rest: int = 1
+    recent_record: str = ""  # e.g., "3-2 L5"
+    injuries: list[str] = Field(default_factory=list)
+
+
+class UnderdogPick(BaseModel):
+    """Identified underdog opportunity."""
+    game: Game
+    underdog: Team
+    favorite: Team
+    bet_type: BetType
+    line: float  # spread value or ML odds
+    odds: int  # -110, +150, etc.
+    underdog_context: TeamContext
+    favorite_context: TeamContext
+
+
+class BetRecommendation(BaseModel):
+    """AI-generated bet recommendation."""
+    pick: UnderdogPick
+    confidence: Confidence
+    reasoning: str
+    edge_factors: list[str] = Field(default_factory=list)
+    risk_factors: list[str] = Field(default_factory=list)
+    suggested_units: float = 1.0
