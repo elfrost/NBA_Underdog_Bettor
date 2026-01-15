@@ -164,6 +164,8 @@ async def main():
                 pick_id = save_pick_to_db(reco)
                 if pick_id:
                     console.print(f"[dim]Saved to DB (ID: {pick_id})[/dim]")
+                elif reco.confidence.value != "low":
+                    console.print(f"[dim]Already in DB (skipped)[/dim]")
 
                 # Send notification (HIGH confidence by default)
                 notif_result = send_pick_notification(reco)

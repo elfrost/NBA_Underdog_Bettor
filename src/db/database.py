@@ -88,11 +88,11 @@ class Database:
 
             conn.commit()
 
-    def save_pick(self, pick: PickRecord) -> int:
-        """Save a pick to the database. Returns pick ID."""
+    def save_pick(self, pick: PickRecord) -> int | None:
+        """Save a pick to the database. Returns pick ID or None if duplicate."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute("""
-                INSERT OR REPLACE INTO picks (
+                INSERT OR IGNORE INTO picks (
                     game_date, game_id, home_team, away_team, underdog, favorite,
                     bet_type, line, odds, confidence, edge_factors, risk_factors,
                     reasoning, implied_prob, estimated_prob, bankroll_pct,
@@ -111,7 +111,8 @@ class Database:
                 pick.favorite_form
             ))
             conn.commit()
-            return cursor.lastrowid
+            # Returns 0 if INSERT was ignored (duplicate)
+            return cursor.lastrowid if cursor.rowcount > 0 else None
 
     def save_result(self, result: ResultRecord) -> int:
         """Save a result to the database. Returns result ID."""
