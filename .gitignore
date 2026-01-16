@@ -23,6 +23,7 @@ dist/
 # Output
 output/*.csv
 output/*.json
+logs/
 
 # Database
 data/*.db
