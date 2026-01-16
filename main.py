@@ -10,12 +10,103 @@ from src.api import BallDontLieClient, OddsAPIClient
 from src.agents import UnderdogAgent
 from src.models.schemas import BetType, UnderdogPick, BetRecommendation
 from src.utils import find_odds_for_game, export_recommendations_to_csv
-from src.db import get_db, PickRecord
+from src.db import get_db, PickRecord, ResultRecord
 from src.notifications import send_pick_notification, Notifier
 from src.bankroll import get_bankroll_manager
 
 
 console = Console()
+
+
+async def update_results(bdl_client: BallDontLieClient) -> int:
+    """Update results for pending picks. Returns number of results updated."""
+    db = get_db()
+    pending = db.get_pending_picks()
+
+    if not pending:
+        return 0
+
+    console.print(f"[yellow]Checking {len(pending)} pending picks for results...[/yellow]")
+    updated = 0
+
+    for pick in pending:
+        # Fetch game data
+        game = await bdl_client.get_game_by_id(pick.game_id)
+        if not game:
+            console.print(f"[dim]Game {pick.game_id} not found[/dim]")
+            continue
+
+        # Only process completed games
+        if game.status != "Final":
+            continue
+
+        # Calculate result
+        home_score = game.home_score or 0
+        away_score = game.away_score or 0
+
+        # Determine if underdog is home or away
+        is_underdog_home = pick.underdog == pick.home_team
+        underdog_score = home_score if is_underdog_home else away_score
+        favorite_score = away_score if is_underdog_home else home_score
+
+        # Actual margin (positive = underdog won by X, negative = lost by X)
+        actual_margin = underdog_score - favorite_score
+
+        # Determine WIN/LOSS/PUSH
+        if pick.bet_type == "SPREAD":
+            # Spread bet: underdog covers if margin + line > 0
+            cover_margin = actual_margin + pick.line
+            if cover_margin > 0:
+                result = "WIN"
+            elif cover_margin < 0:
+                result = "LOSS"
+            else:
+                result = "PUSH"
+        else:  # MONEYLINE
+            # ML bet: underdog wins outright
+            if actual_margin > 0:
+                result = "WIN"
+            elif actual_margin < 0:
+                result = "LOSS"
+            else:
+                result = "PUSH"  # OT tie (rare)
+
+        # Calculate profit/loss
+        if result == "WIN":
+            # For positive odds (underdogs): profit = bet * (odds/100)
+            if pick.odds > 0:
+                profit_loss = pick.bet_amount * (pick.odds / 100)
+            else:
+                # For negative odds: profit = bet * (100/abs(odds))
+                profit_loss = pick.bet_amount * (100 / abs(pick.odds))
+        elif result == "LOSS":
+            profit_loss = -pick.bet_amount
+        else:  # PUSH
+            profit_loss = 0.0
+
+        roi_pct = (profit_loss / pick.bet_amount * 100) if pick.bet_amount > 0 else 0
+
+        # Save result
+        result_record = ResultRecord(
+            pick_id=pick.id,
+            home_score=home_score,
+            away_score=away_score,
+            result=result,
+            actual_margin=actual_margin,
+            profit_loss=profit_loss,
+            roi_pct=roi_pct,
+        )
+        db.save_result(result_record)
+        updated += 1
+
+        # Display result
+        pl_color = "green" if profit_loss > 0 else ("red" if profit_loss < 0 else "yellow")
+        console.print(
+            f"  {pick.away_team} @ {pick.home_team}: {away_score}-{home_score} | "
+            f"{pick.underdog} {pick.bet_type} [{result}] [{pl_color}]${profit_loss:+.2f}[/{pl_color}]"
+        )
+
+    return updated
 
 
 def save_pick_to_db(reco: BetRecommendation) -> int | None:
@@ -92,6 +183,11 @@ async def main():
     agent = UnderdogAgent()
 
     try:
+        # Update results for any pending picks first
+        results_updated = await update_results(bdl_client)
+        if results_updated > 0:
+            console.print(f"[green]Updated {results_updated} pick results[/green]\n")
+
         # Fetch today's games
         console.print("[yellow]Fetching today's games...[/yellow]")
         games = await bdl_client.get_games()

@@ -160,14 +160,14 @@ class Database:
             return [self._row_to_pick(row) for row in rows]
 
     def get_all_results(self) -> list[dict]:
-        """Get all picks with their results for metrics calculation."""
+        """Get all picks with their results (including pending)."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("""
                 SELECT p.*, r.result, r.profit_loss, r.actual_margin, r.home_score, r.away_score
                 FROM picks p
                 LEFT JOIN results r ON p.id = r.pick_id
-                WHERE r.id IS NOT NULL
+                WHERE p.should_bet = 1
                 ORDER BY p.game_date DESC
             """).fetchall()
             return [dict(row) for row in rows]
