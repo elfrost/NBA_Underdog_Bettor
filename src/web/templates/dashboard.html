@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - NBA Underdog Bet{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-white">Dashboard</h1>
+            <p class="text-gray-400 mt-1">{{ now.strftime('%A, %B %d, %Y') }}</p>
+        </div>
+        <a href="/picks" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition">
+            View All Picks →
+        </a>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <!-- Bankroll -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm">Bankroll</p>
+                    <p class="text-2xl font-bold text-white mt-1">${{ "{:,.0f}".format(bankroll) }}</p>
+                </div>
+                <span class="text-3xl">💰</span>
+            </div>
+        </div>
+
+        <!-- Win Rate -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm">Win Rate</p>
+                    <p class="text-2xl font-bold text-white mt-1">{{ "{:.1%}".format(metrics.win_rate) }}</p>
+                    <p class="text-gray-500 text-xs mt-1">{{ metrics.record }}</p>
+                </div>
+                <span class="text-3xl">🎯</span>
+            </div>
+        </div>
+
+        <!-- Total P&L -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm">Total P&L</p>
+                    {% if metrics.total_pl >= 0 %}
+                    <p class="text-2xl font-bold text-green-400 mt-1">+${{ "{:,.2f}".format(metrics.total_pl) }}</p>
+                    {% else %}
+                    <p class="text-2xl font-bold text-red-400 mt-1">-${{ "{:,.2f}".format(metrics.total_pl|abs) }}</p>
+                    {% endif %}
+                </div>
+                <span class="text-3xl">📈</span>
+            </div>
+        </div>
+
+        <!-- ROI -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm">ROI</p>
+                    {% if metrics.roi >= 0 %}
+                    <p class="text-2xl font-bold text-green-400 mt-1">+{{ "{:.1%}".format(metrics.roi) }}</p>
+                    {% else %}
+                    <p class="text-2xl font-bold text-red-400 mt-1">{{ "{:.1%}".format(metrics.roi) }}</p>
+                    {% endif %}
+                </div>
+                <span class="text-3xl">📊</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dynamic Kelly Info -->
+    <div class="bg-gradient-to-r from-blue-900 to-blue-800 rounded-lg p-6 border border-blue-700">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="text-lg font-semibold text-white">Dynamic Kelly Status</h3>
+                <p class="text-blue-200 mt-1">
+                    Current Kelly: <span class="font-bold">{{ "{:.0%}".format(dynamic_kelly) }}</span>
+                    ({{ "{:.0%}".format(kelly_adjustment) }} of base)
+                </p>
+            </div>
+            <div class="text-right">
+                {% if risk_level == 'normal' %}
+                <span class="text-4xl">✅</span>
+                <p class="text-green-300 font-medium">Normal Mode</p>
+                {% elif risk_level == 'cautious' %}
+                <span class="text-4xl">⚠️</span>
+                <p class="text-yellow-300 font-medium">Cautious Mode</p>
+                {% elif risk_level == 'crisis' %}
+                <span class="text-4xl">🚨</span>
+                <p class="text-red-300 font-medium">Crisis Mode</p>
+                {% elif risk_level == 'aggressive' %}
+                <span class="text-4xl">🔥</span>
+                <p class="text-orange-300 font-medium">Aggressive Mode</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Today's Picks -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700">
+        <div class="px-6 py-4 border-b border-gray-700 flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-white">Today's Picks ({{ picks|length }})</h2>
+            <a href="/picks" class="text-blue-400 hover:text-blue-300 text-sm">View all →</a>
+        </div>
+
+        {% if picks %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Game</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Pick</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Line</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Confidence</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Bet</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">EV</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    {% for pick in picks[:5] %}
+                    <tr class="hover:bg-gray-750">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {{ pick.away_team }} @ {{ pick.home_team }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
+                            {{ pick.underdog }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            <span class="px-2 py-1 rounded bg-gray-700">{{ pick.bet_type }}</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-yellow-400 font-mono">
+                            {% if pick.line > 0 %}+{% endif %}{{ pick.line }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% if pick.confidence == 'high' %}
+                            <span class="px-2 py-1 rounded-full bg-green-900 text-green-300">HIGH</span>
+                            {% elif pick.confidence == 'medium' %}
+                            <span class="px-2 py-1 rounded-full bg-yellow-900 text-yellow-300">MEDIUM</span>
+                            {% else %}
+                            <span class="px-2 py-1 rounded-full bg-red-900 text-red-300">LOW</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-white">
+                            {% if pick.should_bet %}
+                            <span class="text-green-400 font-medium">${{ "{:.0f}".format(pick.bet_amount) }}</span>
+                            {% else %}
+                            <span class="text-gray-500">PASS</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% if pick.expected_value > 0 %}
+                            <span class="text-green-400">+${{ "{:.2f}".format(pick.expected_value) }}</span>
+                            {% else %}
+                            <span class="text-gray-500">$0.00</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="px-6 py-12 text-center">
+            <p class="text-gray-400">No picks for today yet.</p>
+            <p class="text-gray-500 text-sm mt-2">Run the analysis to generate picks.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Performance by Confidence -->
+    {% if metrics.by_confidence %}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {% for conf in metrics.by_confidence %}
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-white">{{ conf.confidence|upper }}</h3>
+                {% if conf.confidence == 'high' %}
+                <span class="text-2xl">🎯</span>
+                {% elif conf.confidence == 'medium' %}
+                <span class="text-2xl">📊</span>
+                {% else %}
+                <span class="text-2xl">📉</span>
+                {% endif %}
+            </div>
+            <div class="space-y-2">
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Total</span>
+                    <span class="text-white font-medium">{{ conf.total }} picks</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Wins</span>
+                    <span class="text-green-400 font-medium">{{ conf.wins }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Win Rate</span>
+                    <span class="text-white font-medium">{{ "{:.1%}".format(conf.wins / conf.total) if conf.total > 0 else "N/A" }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">P&L</span>
+                    {% if conf.pl and conf.pl >= 0 %}
+                    <span class="text-green-400 font-medium">+${{ "{:.2f}".format(conf.pl) }}</span>
+                    {% elif conf.pl %}
+                    <span class="text-red-400 font-medium">-${{ "{:.2f}".format(conf.pl|abs) }}</span>
+                    {% else %}
+                    <span class="text-gray-500">$0.00</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

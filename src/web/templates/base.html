@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-900">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}NBA Underdog Bet{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .nav-active { background-color: rgba(59, 130, 246, 0.2); border-left: 3px solid #3B82F6; }
+    </style>
+</head>
+<body class="h-full">
+    <div class="min-h-full">
+        <!-- Navigation -->
+        <nav class="bg-gray-800 border-b border-gray-700">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="flex h-16 items-center justify-between">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <span class="text-2xl">🏀</span>
+                        </div>
+                        <div class="ml-4">
+                            <span class="text-white font-bold text-lg">NBA Underdog Bet</span>
+                            <span class="text-gray-400 text-sm ml-2">v0.7.0</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <!-- Risk Level Badge -->
+                        {% if risk_level == 'normal' %}
+                        <span class="px-3 py-1 rounded-full bg-green-900 text-green-300 text-sm font-medium">
+                            ✅ NORMAL
+                        </span>
+                        {% elif risk_level == 'cautious' %}
+                        <span class="px-3 py-1 rounded-full bg-yellow-900 text-yellow-300 text-sm font-medium">
+                            ⚠️ CAUTIOUS
+                        </span>
+                        {% elif risk_level == 'crisis' %}
+                        <span class="px-3 py-1 rounded-full bg-red-900 text-red-300 text-sm font-medium">
+                            🚨 CRISIS
+                        </span>
+                        {% elif risk_level == 'aggressive' %}
+                        <span class="px-3 py-1 rounded-full bg-orange-900 text-orange-300 text-sm font-medium">
+                            🔥 AGGRESSIVE
+                        </span>
+                        {% endif %}
+                        <!-- Kelly Badge -->
+                        <span class="px-3 py-1 rounded-full bg-blue-900 text-blue-300 text-sm font-medium">
+                            Kelly {{ (dynamic_kelly * 100)|int }}%
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="flex">
+            <!-- Sidebar -->
+            <aside class="w-64 bg-gray-800 min-h-screen border-r border-gray-700">
+                <nav class="mt-5 px-2 space-y-1">
+                    <a href="/" class="{% if page == 'dashboard' %}nav-active{% endif %} text-gray-300 hover:bg-gray-700 hover:text-white group flex items-center px-4 py-3 text-sm font-medium rounded-md">
+                        <span class="mr-3">📊</span>
+                        Dashboard
+                    </a>
+                    <a href="/picks" class="{% if page == 'picks' %}nav-active{% endif %} text-gray-300 hover:bg-gray-700 hover:text-white group flex items-center px-4 py-3 text-sm font-medium rounded-md">
+                        <span class="mr-3">🎯</span>
+                        Today's Picks
+                    </a>
+                    <a href="/results" class="{% if page == 'results' %}nav-active{% endif %} text-gray-300 hover:bg-gray-700 hover:text-white group flex items-center px-4 py-3 text-sm font-medium rounded-md">
+                        <span class="mr-3">📈</span>
+                        Results
+                    </a>
+                    <a href="/analytics" class="{% if page == 'analytics' %}nav-active{% endif %} text-gray-300 hover:bg-gray-700 hover:text-white group flex items-center px-4 py-3 text-sm font-medium rounded-md">
+                        <span class="mr-3">📉</span>
+                        Analytics
+                    </a>
+                </nav>
+
+                <!-- Bankroll Card -->
+                <div class="mt-8 mx-4 p-4 bg-gray-700 rounded-lg">
+                    <div class="text-gray-400 text-xs uppercase tracking-wide">Bankroll</div>
+                    <div class="text-2xl font-bold text-white mt-1">${{ "{:,.0f}".format(settings.bankroll) }}</div>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1 p-8">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

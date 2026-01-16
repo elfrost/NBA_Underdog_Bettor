@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}Today's Picks - NBA Underdog Bet{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-white">Today's Picks</h1>
+            <p class="text-gray-400 mt-1">{{ now.strftime('%A, %B %d, %Y') }}</p>
+        </div>
+        <div class="flex space-x-3">
+            <a href="/api/picks/today" target="_blank" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium transition">
+                📥 Export JSON
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <form method="GET" class="flex flex-wrap gap-4 items-center">
+            <div>
+                <label class="block text-gray-400 text-sm mb-1">Date</label>
+                <input type="date" name="date_filter" value="{{ filter_date }}"
+                    class="bg-gray-700 text-white rounded-lg px-4 py-2 border border-gray-600 focus:border-blue-500 focus:outline-none">
+            </div>
+            <div>
+                <label class="block text-gray-400 text-sm mb-1">Confidence</label>
+                <select name="confidence" class="bg-gray-700 text-white rounded-lg px-4 py-2 border border-gray-600 focus:border-blue-500 focus:outline-none">
+                    <option value="">All</option>
+                    <option value="high" {% if confidence_filter == 'high' %}selected{% endif %}>HIGH</option>
+                    <option value="medium" {% if confidence_filter == 'medium' %}selected{% endif %}>MEDIUM</option>
+                    <option value="low" {% if confidence_filter == 'low' %}selected{% endif %}>LOW</option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition">
+                    Filter
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <p class="text-gray-400 text-sm">Total Picks</p>
+            <p class="text-2xl font-bold text-white">{{ picks|length }}</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <p class="text-gray-400 text-sm">Actionable Bets</p>
+            <p class="text-2xl font-bold text-green-400">{{ picks|selectattr('should_bet')|list|length }}</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <p class="text-gray-400 text-sm">Total Exposure</p>
+            <p class="text-2xl font-bold text-white">${{ "{:.0f}".format(picks|selectattr('should_bet')|sum(attribute='bet_amount')) }}</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <p class="text-gray-400 text-sm">Expected Value</p>
+            <p class="text-2xl font-bold text-green-400">+${{ "{:.2f}".format(picks|selectattr('should_bet')|sum(attribute='expected_value')) }}</p>
+        </div>
+    </div>
+
+    <!-- Picks Table -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+        {% if picks %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Game</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Pick</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Line</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Odds</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Confidence</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Implied</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Est.</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Kelly %</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Bet</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">EV</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    {% for pick in picks %}
+                    <tr class="hover:bg-gray-750 {% if pick.should_bet %}bg-green-900/20{% endif %}">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {{ pick.away_team }} @ {{ pick.home_team }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
+                            {{ pick.underdog }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            <span class="px-2 py-1 rounded bg-gray-700 text-gray-300">{{ pick.bet_type }}</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-yellow-400 font-mono">
+                            {% if pick.line > 0 %}+{% endif %}{{ pick.line }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300 font-mono">
+                            {% if pick.odds > 0 %}+{% endif %}{{ pick.odds|int }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% if pick.confidence == 'high' %}
+                            <span class="px-2 py-1 rounded-full bg-green-900 text-green-300 text-xs font-medium">HIGH</span>
+                            {% elif pick.confidence == 'medium' %}
+                            <span class="px-2 py-1 rounded-full bg-yellow-900 text-yellow-300 text-xs font-medium">MEDIUM</span>
+                            {% else %}
+                            <span class="px-2 py-1 rounded-full bg-red-900 text-red-300 text-xs font-medium">LOW</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                            {{ "{:.1%}".format(pick.implied_prob) if pick.implied_prob else "N/A" }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {{ "{:.1%}".format(pick.estimated_prob) if pick.estimated_prob else "N/A" }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-400">
+                            {{ "{:.1%}".format(pick.bankroll_pct / 100) if pick.bankroll_pct else "0%" }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% if pick.should_bet %}
+                            <span class="text-green-400 font-bold">${{ "{:.0f}".format(pick.bet_amount) }}</span>
+                            {% else %}
+                            <span class="text-gray-500">PASS</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% if pick.expected_value and pick.expected_value > 0 %}
+                            <span class="text-green-400">+${{ "{:.2f}".format(pick.expected_value) }}</span>
+                            {% else %}
+                            <span class="text-gray-500">$0.00</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="px-6 py-12 text-center">
+            <span class="text-4xl mb-4 block">🎯</span>
+            <p class="text-gray-400 text-lg">No picks found for this date.</p>
+            <p class="text-gray-500 text-sm mt-2">Run <code class="bg-gray-700 px-2 py-1 rounded">python main.py</code> to generate picks.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Detailed Analysis (expandable) -->
+    {% if picks %}
+    <div class="bg-gray-800 rounded-lg border border-gray-700">
+        <div class="px-6 py-4 border-b border-gray-700">
+            <h2 class="text-lg font-semibold text-white">Detailed Analysis</h2>
+        </div>
+        <div class="divide-y divide-gray-700">
+            {% for pick in picks if pick.should_bet %}
+            <div class="p-6">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 class="text-lg font-medium text-white">
+                            {{ pick.underdog }}
+                            <span class="text-yellow-400 font-mono ml-2">{% if pick.line > 0 %}+{% endif %}{{ pick.line }}</span>
+                            <span class="text-gray-400 ml-2">({{ pick.bet_type }})</span>
+                        </h3>
+                        <p class="text-gray-400">{{ pick.away_team }} @ {{ pick.home_team }}</p>
+                    </div>
+                    <div class="text-right">
+                        {% if pick.confidence == 'high' %}
+                        <span class="px-3 py-1 rounded-full bg-green-900 text-green-300 font-medium">HIGH</span>
+                        {% elif pick.confidence == 'medium' %}
+                        <span class="px-3 py-1 rounded-full bg-yellow-900 text-yellow-300 font-medium">MEDIUM</span>
+                        {% endif %}
+                        <p class="text-green-400 font-bold text-lg mt-2">${{ "{:.0f}".format(pick.bet_amount) }}</p>
+                    </div>
+                </div>
+
+                {% if pick.edge_factors %}
+                <div class="mb-3">
+                    <span class="text-green-400 font-medium">Edge factors:</span>
+                    <span class="text-gray-300 ml-2">{{ pick.edge_factors }}</span>
+                </div>
+                {% endif %}
+
+                {% if pick.risk_factors %}
+                <div class="mb-3">
+                    <span class="text-red-400 font-medium">Risk factors:</span>
+                    <span class="text-gray-300 ml-2">{{ pick.risk_factors }}</span>
+                </div>
+                {% endif %}
+
+                {% if pick.reasoning %}
+                <div class="bg-gray-700/50 rounded-lg p-4 mt-4">
+                    <p class="text-gray-300 text-sm leading-relaxed">{{ pick.reasoning[:500] }}{% if pick.reasoning|length > 500 %}...{% endif %}</p>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

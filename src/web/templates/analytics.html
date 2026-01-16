@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - NBA Underdog Bet{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-white">Analytics</h1>
+        <p class="text-gray-400 mt-1">Detailed performance analysis and charts</p>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <p class="text-gray-400 text-sm">Total Picks</p>
+            <p class="text-2xl font-bold text-white">{{ metrics.total_picks }}</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <p class="text-gray-400 text-sm">Win Rate</p>
+            <p class="text-2xl font-bold {% if metrics.win_rate >= 0.5 %}text-green-400{% else %}text-red-400{% endif %}">
+                {{ "{:.1%}".format(metrics.win_rate) }}
+            </p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <p class="text-gray-400 text-sm">Total P&L</p>
+            {% if metrics.total_pl >= 0 %}
+            <p class="text-2xl font-bold text-green-400">+${{ "{:,.2f}".format(metrics.total_pl) }}</p>
+            {% else %}
+            <p class="text-2xl font-bold text-red-400">-${{ "{:,.2f}".format(metrics.total_pl|abs) }}</p>
+            {% endif %}
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <p class="text-gray-400 text-sm">ROI</p>
+            {% if metrics.roi >= 0 %}
+            <p class="text-2xl font-bold text-green-400">+{{ "{:.1%}".format(metrics.roi) }}</p>
+            {% else %}
+            <p class="text-2xl font-bold text-red-400">{{ "{:.1%}".format(metrics.roi) }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Charts Row 1 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- P&L Over Time Chart -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+            <h3 class="text-lg font-semibold text-white mb-4">P&L Over Time</h3>
+            <div class="h-64">
+                <canvas id="plChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Win Rate by Confidence Chart -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+            <h3 class="text-lg font-semibold text-white mb-4">Win Rate by Confidence</h3>
+            <div class="h-64">
+                <canvas id="confidenceChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row 2 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Calibration Chart -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+            <h3 class="text-lg font-semibold text-white mb-4">Confidence Calibration</h3>
+            <p class="text-gray-400 text-sm mb-4">Expected vs Actual win rates</p>
+            <div class="h-64">
+                <canvas id="calibrationChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Bet Type Performance -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+            <h3 class="text-lg font-semibold text-white mb-4">Performance by Bet Type</h3>
+            <div class="h-64">
+                <canvas id="betTypeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calibration Details -->
+    <div class="bg-gray-800 rounded-lg border border-gray-700">
+        <div class="px-6 py-4 border-b border-gray-700">
+            <h2 class="text-lg font-semibold text-white">Confidence Calibration Details</h2>
+            <p class="text-gray-400 text-sm mt-1">How accurate are your confidence predictions?</p>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- HIGH Calibration -->
+                <div class="bg-gray-700/50 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-green-400 font-semibold">HIGH</span>
+                        <span class="text-gray-400 text-sm">Expected: 70%+</span>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Actual</span>
+                            <span class="text-white font-medium">{{ "{:.1%}".format(calibration.actual_high) }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Calibration</span>
+                            {% if calibration.calibration_high >= 0.9 %}
+                            <span class="text-green-400 font-medium">{{ "{:.2f}".format(calibration.calibration_high) }} ✓</span>
+                            {% elif calibration.calibration_high >= 0.7 %}
+                            <span class="text-yellow-400 font-medium">{{ "{:.2f}".format(calibration.calibration_high) }}</span>
+                            {% else %}
+                            <span class="text-red-400 font-medium">{{ "{:.2f}".format(calibration.calibration_high) }}</span>
+                            {% endif %}
+                        </div>
+                        <!-- Progress bar -->
+                        <div class="mt-2">
+                            <div class="w-full bg-gray-600 rounded-full h-2">
+                                <div class="bg-green-500 h-2 rounded-full" style="width: {{ (calibration.actual_high * 100)|int }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MEDIUM Calibration -->
+                <div class="bg-gray-700/50 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-yellow-400 font-semibold">MEDIUM</span>
+                        <span class="text-gray-400 text-sm">Expected: 55%</span>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Actual</span>
+                            <span class="text-white font-medium">{{ "{:.1%}".format(calibration.actual_medium) }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Calibration</span>
+                            {% if calibration.calibration_medium >= 0.9 %}
+                            <span class="text-green-400 font-medium">{{ "{:.2f}".format(calibration.calibration_medium) }} ✓</span>
+                            {% elif calibration.calibration_medium >= 0.7 %}
+                            <span class="text-yellow-400 font-medium">{{ "{:.2f}".format(calibration.calibration_medium) }}</span>
+                            {% else %}
+                            <span class="text-red-400 font-medium">{{ "{:.2f}".format(calibration.calibration_medium) }}</span>
+                            {% endif %}
+                        </div>
+                        <!-- Progress bar -->
+                        <div class="mt-2">
+                            <div class="w-full bg-gray-600 rounded-full h-2">
+                                <div class="bg-yellow-500 h-2 rounded-full" style="width: {{ (calibration.actual_medium * 100)|int }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LOW Calibration -->
+                <div class="bg-gray-700/50 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-red-400 font-semibold">LOW</span>
+                        <span class="text-gray-400 text-sm">Expected: 35%</span>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Actual</span>
+                            <span class="text-white font-medium">{{ "{:.1%}".format(calibration.actual_low) }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Calibration</span>
+                            {% if calibration.calibration_low >= 0.9 %}
+                            <span class="text-green-400 font-medium">{{ "{:.2f}".format(calibration.calibration_low) }} ✓</span>
+                            {% elif calibration.calibration_low >= 0.7 %}
+                            <span class="text-yellow-400 font-medium">{{ "{:.2f}".format(calibration.calibration_low) }}</span>
+                            {% else %}
+                            <span class="text-red-400 font-medium">{{ "{:.2f}".format(calibration.calibration_low) }}</span>
+                            {% endif %}
+                        </div>
+                        <!-- Progress bar -->
+                        <div class="mt-2">
+                            <div class="w-full bg-gray-600 rounded-full h-2">
+                                <div class="bg-red-500 h-2 rounded-full" style="width: {{ (calibration.actual_low * 100)|int }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Overall Calibration -->
+            <div class="mt-6 p-4 bg-blue-900/30 rounded-lg border border-blue-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-blue-300 font-semibold">Overall Calibration Score</span>
+                        <p class="text-gray-400 text-sm mt-1">1.0 = perfectly calibrated</p>
+                    </div>
+                    <span class="text-3xl font-bold {% if calibration.overall_calibration >= 0.9 %}text-green-400{% elif calibration.overall_calibration >= 0.7 %}text-yellow-400{% else %}text-red-400{% endif %}">
+                        {{ "{:.2f}".format(calibration.overall_calibration) }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Chart.js config
+Chart.defaults.color = '#9CA3AF';
+Chart.defaults.borderColor = '#374151';
+
+// P&L Over Time Chart
+const plCtx = document.getElementById('plChart').getContext('2d');
+const plData = {{ results|tojson }};
+
+// Calculate cumulative P&L
+let cumPL = 0;
+const plLabels = [];
+const plValues = [];
+plData.forEach((r, i) => {
+    if (r.profit_loss !== null) {
+        cumPL += r.profit_loss;
+        plLabels.push(r.game_date ? r.game_date.substring(5, 10) : `Pick ${i+1}`);
+        plValues.push(cumPL);
+    }
+});
+
+new Chart(plCtx, {
+    type: 'line',
+    data: {
+        labels: plLabels.length > 0 ? plLabels : ['No data'],
+        datasets: [{
+            label: 'Cumulative P&L',
+            data: plValues.length > 0 ? plValues : [0],
+            borderColor: plValues.length > 0 && plValues[plValues.length-1] >= 0 ? '#10B981' : '#EF4444',
+            backgroundColor: plValues.length > 0 && plValues[plValues.length-1] >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+            fill: true,
+            tension: 0.4
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                grid: { color: '#374151' }
+            },
+            x: {
+                grid: { display: false }
+            }
+        }
+    }
+});
+
+// Win Rate by Confidence Chart
+const confCtx = document.getElementById('confidenceChart').getContext('2d');
+const confData = {{ metrics.by_confidence|tojson }};
+
+new Chart(confCtx, {
+    type: 'bar',
+    data: {
+        labels: confData.map(c => c.confidence.toUpperCase()),
+        datasets: [{
+            label: 'Win Rate',
+            data: confData.map(c => c.total > 0 ? (c.wins / c.total * 100) : 0),
+            backgroundColor: ['#10B981', '#F59E0B', '#EF4444'],
+            borderRadius: 8
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 100,
+                ticks: { callback: v => v + '%' },
+                grid: { color: '#374151' }
+            },
+            x: {
+                grid: { display: false }
+            }
+        }
+    }
+});
+
+// Calibration Chart
+const calCtx = document.getElementById('calibrationChart').getContext('2d');
+new Chart(calCtx, {
+    type: 'bar',
+    data: {
+        labels: ['HIGH', 'MEDIUM', 'LOW'],
+        datasets: [
+            {
+                label: 'Expected',
+                data: [70, 55, 35],
+                backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                borderColor: '#3B82F6',
+                borderWidth: 2
+            },
+            {
+                label: 'Actual',
+                data: [
+                    {{ (calibration.actual_high * 100)|round(1) }},
+                    {{ (calibration.actual_medium * 100)|round(1) }},
+                    {{ (calibration.actual_low * 100)|round(1) }}
+                ],
+                backgroundColor: ['rgba(16, 185, 129, 0.5)', 'rgba(245, 158, 11, 0.5)', 'rgba(239, 68, 68, 0.5)'],
+                borderColor: ['#10B981', '#F59E0B', '#EF4444'],
+                borderWidth: 2
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 100,
+                ticks: { callback: v => v + '%' },
+                grid: { color: '#374151' }
+            },
+            x: {
+                grid: { display: false }
+            }
+        }
+    }
+});
+
+// Bet Type Chart
+const btCtx = document.getElementById('betTypeChart').getContext('2d');
+const btData = {{ metrics.by_bet_type|tojson }};
+
+new Chart(btCtx, {
+    type: 'doughnut',
+    data: {
+        labels: btData.map(b => b.bet_type),
+        datasets: [{
+            data: btData.map(b => b.total),
+            backgroundColor: ['#3B82F6', '#8B5CF6'],
+            borderWidth: 0
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

@@ -131,7 +131,7 @@ class DiscordNotifier:
                 },
             ],
             "footer": {
-                "text": f"NBA Underdog Bet v0.6.0 | {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                "text": f"NBA Underdog Bet v0.7.0 | {datetime.now().strftime('%Y-%m-%d %H:%M')}"
             },
         }
 
