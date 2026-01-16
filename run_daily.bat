@@ -2,17 +2,29 @@
 REM NBA Underdog Bet - Daily Analysis Script
 REM Run this via Windows Task Scheduler
 
+echo ========================================
+echo NBA Underdog Bet - Daily Analysis
+echo %date% %time%
+echo ========================================
+
 cd /d "c:\Users\racer\OneDrive\ai-project-starter\projects\NBA_Underdog_Bet"
 
-REM Activate venv if exists
+REM Create logs folder if not exists
+if not exist "logs" mkdir logs
+
+REM Activate venv
 if exist ".venv\Scripts\activate.bat" (
+    echo Activating virtual environment...
     call .venv\Scripts\activate.bat
+) else (
+    echo No venv found, using system Python...
 )
 
 REM Run analysis
-python main.py >> logs\daily_%date:~-4,4%%date:~-10,2%%date:~-7,2%.log 2>&1
+echo Running analysis...
+python main.py
 
-REM Deactivate
-if exist ".venv\Scripts\deactivate.bat" (
-    call deactivate
-)
+echo.
+echo ========================================
+echo Done! Press any key to close...
+pause >nul
