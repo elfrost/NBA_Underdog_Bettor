@@ -46,6 +46,10 @@ class PickRecord:
     favorite_rest: int = 0
     favorite_form: str = ""
 
+    # v0.8.0: Shadow betting for forward testing
+    is_shadow: int = 0  # 0 = real bet, 1 = shadow bet (filtered out)
+    filter_reason: str = ""  # Why it was filtered (for analysis)
+
 
 @dataclass
 class ResultRecord:

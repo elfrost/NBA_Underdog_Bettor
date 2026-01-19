@@ -109,11 +109,14 @@ async def update_results(bdl_client: BallDontLieClient) -> int:
     return updated
 
 
-def save_pick_to_db(reco: BetRecommendation) -> int | None:
-    """Save a pick to the database. Returns pick ID or None if not saved."""
+def save_pick_to_db(reco: BetRecommendation, is_shadow: bool = False, filter_reason: str = "") -> int | None:
+    """Save a pick to the database. Returns pick ID or None if not saved.
+
+    v0.8.0: Now saves ALL picks (shadow and real) for forward testing analysis.
+    """
     pick = reco.pick
 
-    # Only save HIGH and MEDIUM confidence picks
+    # Only save HIGH and MEDIUM confidence picks (LOW still skipped)
     if reco.confidence.value == "low":
         return None
 
@@ -137,13 +140,15 @@ def save_pick_to_db(reco: BetRecommendation) -> int | None:
         bankroll_pct=reco.bankroll_pct,
         bet_amount=reco.bet_amount,
         expected_value=reco.expected_value,
-        should_bet=reco.should_bet,
+        should_bet=reco.should_bet and not is_shadow,  # Shadow bets = should_bet False
         underdog_b2b=pick.underdog_context.is_back_to_back,
         underdog_rest=pick.underdog_context.days_rest,
         underdog_form=pick.underdog_context.recent_form,
         favorite_b2b=pick.favorite_context.is_back_to_back,
         favorite_rest=pick.favorite_context.days_rest,
         favorite_form=pick.favorite_context.recent_form,
+        is_shadow=1 if is_shadow else 0,
+        filter_reason=filter_reason,
     )
 
     return db.save_pick(record)
@@ -224,14 +229,25 @@ async def main():
 
             # Check both spread and ML opportunities
             for bet_type in [BetType.SPREAD, BetType.MONEYLINE]:
+                # v0.8.0: Track filter reasons for shadow betting
+                filter_reasons = []
+                is_shadow = False
+
                 if not agent.filter_underdog(odds, bet_type):
-                    continue
+                    filter_reasons.append(f"odds_filter_{bet_type.value}")
+                    is_shadow = True
 
                 # Build context for both teams
                 console.print(f"[yellow]Analyzing {underdog.abbreviation} ({bet_type.value})...[/yellow]")
 
                 underdog_ctx = await bdl_client.build_team_context(underdog, game.date)
                 favorite_ctx = await bdl_client.build_team_context(favorite, game.date)
+
+                # v0.8.0: Check underdog rest filter (but don't skip - mark as shadow)
+                if underdog_ctx.days_rest < settings.min_underdog_rest:
+                    filter_reasons.append(f"rest_{underdog_ctx.days_rest}d<{settings.min_underdog_rest}d")
+                    is_shadow = True
+                    console.print(f"[dim]Shadow: {underdog.abbreviation} has only {underdog_ctx.days_rest}d rest[/dim]")
 
                 # Create pick
                 if bet_type == BetType.SPREAD:
@@ -254,14 +270,32 @@ async def main():
 
                 # Get AI recommendation
                 reco = await agent.analyze_pick(pick)
-                recommendations.append(reco)
 
-                # Save to database (HIGH/MEDIUM confidence only)
-                pick_id = save_pick_to_db(reco)
-                if pick_id:
-                    console.print(f"[dim]Saved to DB (ID: {pick_id})[/dim]")
-                elif reco.confidence.value != "low":
-                    console.print(f"[dim]Already in DB (skipped)[/dim]")
+                # v0.8.0: Apply calibration factor to estimated probability
+                if settings.calibration_factor < 1.0:
+                    original_est = reco.estimated_prob
+                    reco.estimated_prob *= settings.calibration_factor
+                    if reco.estimated_prob < reco.implied_prob:
+                        reco.should_bet = False
+                        console.print(f"[dim]Calibrated: {original_est*100:.0f}% -> {reco.estimated_prob*100:.0f}%[/dim]")
+
+                # v0.8.0: Check MEDIUM confidence filter (but don't skip - mark as shadow)
+                if settings.high_confidence_only and reco.confidence.value == "medium":
+                    filter_reasons.append("medium_confidence")
+                    is_shadow = True
+                    console.print(f"[dim]Shadow: MEDIUM confidence[/dim]")
+
+                # v0.8.0: Save ALL picks (shadow and real) for forward testing
+                pick_id = save_pick_to_db(reco, is_shadow=is_shadow, filter_reason="|".join(filter_reasons))
+
+                if is_shadow:
+                    console.print(f"[dim]Saved as SHADOW (ID: {pick_id}) - {', '.join(filter_reasons)}[/dim]")
+                else:
+                    recommendations.append(reco)
+                    if pick_id:
+                        console.print(f"[green]Saved as REAL BET (ID: {pick_id})[/green]")
+                    elif reco.confidence.value != "low":
+                        console.print(f"[dim]Already in DB[/dim]")
 
                 # Send notification (HIGH confidence by default)
                 notif_result = send_pick_notification(reco)

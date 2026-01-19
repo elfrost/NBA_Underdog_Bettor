@@ -26,13 +26,18 @@ class Settings(BaseSettings):
     min_ml_odds: int = 150
     max_ml_odds: int = 300
 
+    # v0.8.0 Optimization filters (based on backtesting)
+    min_underdog_rest: int = 2  # Require underdog to have 2+ days rest (100% of wins had this)
+    high_confidence_only: bool = True  # Skip MEDIUM confidence picks (-61.7% ROI)
+    calibration_factor: float = 0.90  # Slight deflation (0.75 was too aggressive)
+
     # Analysis settings
     lookback_days: int = 7  # For recent form analysis
 
     # Kelly Criterion / Bankroll settings
     bankroll: float = 1000.0  # Total bankroll in dollars
-    kelly_fraction: float = 0.25  # Quarter Kelly (conservative)
-    max_bet_pct: float = 0.05  # Max 5% of bankroll per bet
+    kelly_fraction: float = 0.15  # Reduced from 0.25 (more conservative due to calibration issues)
+    max_bet_pct: float = 0.03  # Reduced from 5% to 3% max per bet
     min_bet_pct: float = 0.005  # Min 0.5% ($5 on $1000) to bet
 
     # Notifications

@@ -98,8 +98,8 @@ class Database:
                     reasoning, implied_prob, estimated_prob, bankroll_pct,
                     bet_amount, expected_value, should_bet, underdog_b2b,
                     underdog_rest, underdog_form, favorite_b2b, favorite_rest,
-                    favorite_form
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    favorite_form, is_shadow, filter_reason
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 pick.game_date, pick.game_id, pick.home_team, pick.away_team,
                 pick.underdog, pick.favorite, pick.bet_type, pick.line,
@@ -108,7 +108,7 @@ class Database:
                 pick.bankroll_pct, pick.bet_amount, pick.expected_value,
                 int(pick.should_bet), int(pick.underdog_b2b), pick.underdog_rest,
                 pick.underdog_form, int(pick.favorite_b2b), pick.favorite_rest,
-                pick.favorite_form
+                pick.favorite_form, pick.is_shadow, pick.filter_reason
             ))
             conn.commit()
             # Returns 0 if INSERT was ignored (duplicate)

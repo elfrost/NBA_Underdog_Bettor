@@ -159,6 +159,7 @@ Consider your historical performance when assessing confidence level.
         dynamic_kelly = bankroll_mgr.calculate_dynamic_kelly()
 
         # Apply Kelly Criterion sizing with dynamic adjustment
+        # v0.8.0: Added calibration_factor to reduce overconfident probability estimates
         kelly_result = calculate_bet_sizing(
             american_odds=pick.odds,
             confidence=reco.confidence,
@@ -166,6 +167,7 @@ Consider your historical performance when assessing confidence level.
             kelly_fraction=dynamic_kelly,
             max_bet_pct=self.settings.max_bet_pct,
             min_bet_pct=self.settings.min_bet_pct,
+            calibration_factor=getattr(self.settings, 'calibration_factor', 1.0),
         )
 
         # Update recommendation with Kelly data

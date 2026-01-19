@@ -4,6 +4,7 @@ from src.models.schemas import Confidence
 
 
 # Edge adjustment based on confidence level
+# v0.8.0: Keep original edges, calibration is applied separately via calibration_factor
 CONFIDENCE_EDGE = {
     Confidence.HIGH: 0.08,    # +8% edge for HIGH confidence
     Confidence.MEDIUM: 0.04,  # +4% edge for MEDIUM confidence
@@ -99,6 +100,7 @@ def calculate_bet_sizing(
     kelly_fraction: float = 0.25,
     max_bet_pct: float = 0.05,
     min_bet_pct: float = 0.005,
+    calibration_factor: float = 1.0,
 ) -> dict:
     """Calculate optimal bet size using Kelly Criterion.
 
@@ -109,6 +111,7 @@ def calculate_bet_sizing(
         kelly_fraction: Fraction of Kelly to use (0.25 = quarter Kelly)
         max_bet_pct: Maximum bet as % of bankroll (0.05 = 5%)
         min_bet_pct: Minimum bet as % of bankroll (0.005 = 0.5%)
+        calibration_factor: Factor to deflate estimated probability (v0.8.0)
 
     Returns:
         Dictionary with sizing details:
@@ -124,6 +127,9 @@ def calculate_bet_sizing(
     # Calculate probabilities
     implied_prob = implied_probability(american_odds)
     estimated_prob = estimate_win_probability(american_odds, confidence)
+
+    # v0.8.0: Apply calibration factor to reduce overconfidence
+    estimated_prob = estimated_prob * calibration_factor
 
     # Calculate full Kelly
     full_kelly = calculate_kelly(american_odds, estimated_prob)
