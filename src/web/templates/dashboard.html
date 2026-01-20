@@ -99,6 +99,27 @@
         </div>
     </div>
 
+    <!-- Shadow Betting Comparison -->
+    {% if shadow_metrics.total_picks > 0 %}
+    <div class="bg-gradient-to-r from-purple-900 to-purple-800 rounded-lg p-6 border border-purple-700">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="text-lg font-semibold text-white">👻 Shadow Bets (Forward Testing)</h3>
+                <p class="text-purple-200 mt-1">
+                    Picks that were filtered out but still tracked
+                </p>
+            </div>
+            <div class="text-right">
+                <p class="text-2xl font-bold text-white">{{ shadow_metrics.record }}</p>
+                <p class="text-purple-200">{{ "{:.0%}".format(shadow_metrics.win_rate) }} win rate</p>
+            </div>
+        </div>
+        <p class="text-purple-300 text-sm mt-3">
+            Compare shadow vs real bets to see if filters are helping or hurting
+        </p>
+    </div>
+    {% endif %}
+
     <!-- Today's Picks -->
     <div class="bg-gray-800 rounded-lg border border-gray-700">
         <div class="px-6 py-4 border-b border-gray-700 flex justify-between items-center">

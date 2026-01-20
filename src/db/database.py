@@ -59,7 +59,48 @@ class Database:
                     favorite_rest INTEGER,
                     favorite_form TEXT,
 
+                    -- v0.8.0: Shadow betting
+                    is_shadow INTEGER DEFAULT 0,
+                    filter_reason TEXT DEFAULT '',
+
+                    -- v0.9.0: CLV Tracking
+                    opening_line REAL DEFAULT 0.0,
+                    opening_odds INTEGER DEFAULT 0,
+                    closing_line REAL DEFAULT 0.0,
+                    closing_odds INTEGER DEFAULT 0,
+                    clv_line REAL DEFAULT 0.0,
+                    clv_odds REAL DEFAULT 0.0,
+
+                    -- v0.9.0: ML Integration
+                    ml_probability REAL DEFAULT 0.0,
+                    injury_impact REAL DEFAULT 0.0,
+
                     UNIQUE(game_id, bet_type, underdog)
+                )
+            """)
+
+            # v0.9.0: Line snapshots for movement tracking
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS line_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    game_id TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    bookmaker TEXT,
+                    home_team TEXT,
+                    away_team TEXT,
+                    spread REAL,
+                    spread_odds INTEGER,
+                    ml_underdog_odds INTEGER,
+                    ml_favorite_odds INTEGER
+                )
+            """)
+
+            # v0.9.0: System configuration for auto-calibration
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS system_config (
+                    key TEXT PRIMARY KEY,
+                    value TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
 
@@ -88,6 +129,9 @@ class Database:
 
             conn.commit()
 
+        # Migrate existing schema to add new columns
+        self.migrate_schema()
+
     def save_pick(self, pick: PickRecord) -> int | None:
         """Save a pick to the database. Returns pick ID or None if duplicate."""
         with sqlite3.connect(self.db_path) as conn:
@@ -98,8 +142,10 @@ class Database:
                     reasoning, implied_prob, estimated_prob, bankroll_pct,
                     bet_amount, expected_value, should_bet, underdog_b2b,
                     underdog_rest, underdog_form, favorite_b2b, favorite_rest,
-                    favorite_form, is_shadow, filter_reason
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    favorite_form, is_shadow, filter_reason,
+                    opening_line, opening_odds, closing_line, closing_odds,
+                    clv_line, clv_odds, ml_probability, injury_impact
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 pick.game_date, pick.game_id, pick.home_team, pick.away_team,
                 pick.underdog, pick.favorite, pick.bet_type, pick.line,
@@ -108,7 +154,9 @@ class Database:
                 pick.bankroll_pct, pick.bet_amount, pick.expected_value,
                 int(pick.should_bet), int(pick.underdog_b2b), pick.underdog_rest,
                 pick.underdog_form, int(pick.favorite_b2b), pick.favorite_rest,
-                pick.favorite_form, pick.is_shadow, pick.filter_reason
+                pick.favorite_form, pick.is_shadow, pick.filter_reason,
+                pick.opening_line, pick.opening_odds, pick.closing_line, pick.closing_odds,
+                pick.clv_line, pick.clv_odds, pick.ml_probability, pick.injury_impact
             ))
             conn.commit()
             # Returns 0 if INSERT was ignored (duplicate)
@@ -130,13 +178,18 @@ class Database:
             conn.commit()
             return cursor.lastrowid
 
-    def get_pending_picks(self, before_date: Optional[datetime] = None) -> list[PickRecord]:
-        """Get picks without results (pending games)."""
+    def get_pending_picks(self, before_date: Optional[datetime] = None, include_shadow: bool = True) -> list[PickRecord]:
+        """Get picks without results (pending games).
+
+        v0.9.0: Now includes shadow picks by default for forward testing analysis.
+        """
         query = """
             SELECT p.* FROM picks p
             LEFT JOIN results r ON p.id = r.pick_id
-            WHERE r.id IS NULL AND p.should_bet = 1
+            WHERE r.id IS NULL
         """
+        if not include_shadow:
+            query += " AND p.should_bet = 1"
         if before_date:
             query += f" AND p.game_date < '{before_date.isoformat()}'"
 
@@ -159,18 +212,57 @@ class Database:
             """, (date_str,)).fetchall()
             return [self._row_to_pick(row) for row in rows]
 
-    def get_all_results(self) -> list[dict]:
-        """Get all picks with their results (including pending)."""
+    def get_all_results(self, include_shadow: bool = False) -> list[dict]:
+        """Get all picks with their results (including pending).
+
+        Args:
+            include_shadow: If True, include shadow bets in results.
+        """
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            rows = conn.execute("""
-                SELECT p.*, r.result, r.profit_loss, r.actual_margin, r.home_score, r.away_score
-                FROM picks p
-                LEFT JOIN results r ON p.id = r.pick_id
-                WHERE p.should_bet = 1
-                ORDER BY p.game_date DESC
-            """).fetchall()
+            if include_shadow:
+                query = """
+                    SELECT p.*, r.result, r.profit_loss, r.actual_margin, r.home_score, r.away_score
+                    FROM picks p
+                    LEFT JOIN results r ON p.id = r.pick_id
+                    ORDER BY p.game_date DESC
+                """
+            else:
+                query = """
+                    SELECT p.*, r.result, r.profit_loss, r.actual_margin, r.home_score, r.away_score
+                    FROM picks p
+                    LEFT JOIN results r ON p.id = r.pick_id
+                    WHERE p.should_bet = 1
+                    ORDER BY p.game_date DESC
+                """
+            rows = conn.execute(query).fetchall()
             return [dict(row) for row in rows]
+
+    def get_shadow_metrics(self) -> dict:
+        """Calculate performance metrics for shadow bets only."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+
+            stats = conn.execute("""
+                SELECT
+                    COUNT(*) as total_picks,
+                    SUM(CASE WHEN r.result = 'WIN' THEN 1 ELSE 0 END) as wins,
+                    SUM(CASE WHEN r.result = 'LOSS' THEN 1 ELSE 0 END) as losses,
+                    SUM(CASE WHEN r.result = 'PUSH' THEN 1 ELSE 0 END) as pushes
+                FROM picks p
+                JOIN results r ON p.id = r.pick_id
+                WHERE p.is_shadow = 1
+            """).fetchone()
+
+            total = stats['total_picks'] or 0
+            wins = stats['wins'] or 0
+            losses = stats['losses'] or 0
+
+            return {
+                "total_picks": total,
+                "record": f"{wins}-{losses}",
+                "win_rate": wins / total if total > 0 else 0,
+            }
 
     def get_metrics(self) -> dict:
         """Calculate performance metrics."""
@@ -234,8 +326,153 @@ class Database:
                 "by_bet_type": [dict(r) for r in by_bet_type],
             }
 
+    # ===== v0.9.0: Line Snapshots =====
+
+    def save_line_snapshot(self, game_id: str, bookmaker: str, home_team: str,
+                           away_team: str, spread: float, spread_odds: int,
+                           ml_underdog_odds: int, ml_favorite_odds: int) -> int:
+        """Save a line snapshot for movement tracking."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                INSERT INTO line_snapshots (
+                    game_id, bookmaker, home_team, away_team, spread,
+                    spread_odds, ml_underdog_odds, ml_favorite_odds
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (game_id, bookmaker, home_team, away_team, spread,
+                  spread_odds, ml_underdog_odds, ml_favorite_odds))
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_line_history(self, game_id: str) -> list[dict]:
+        """Get line movement history for a game."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("""
+                SELECT * FROM line_snapshots
+                WHERE game_id = ?
+                ORDER BY timestamp ASC
+            """, (game_id,)).fetchall()
+            return [dict(row) for row in rows]
+
+    # ===== v0.9.0: System Config =====
+
+    def get_config(self, key: str, default: str = "") -> str:
+        """Get a system config value."""
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT value FROM system_config WHERE key = ?", (key,)
+            ).fetchone()
+            return row[0] if row else default
+
+    def set_config(self, key: str, value: str) -> None:
+        """Set a system config value."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO system_config (key, value, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+            """, (key, value))
+            conn.commit()
+
+    # ===== v0.9.0: CLV Updates =====
+
+    def update_closing_line(self, pick_id: int, closing_line: float,
+                            closing_odds: int, clv_line: float, clv_odds: float) -> None:
+        """Update a pick with closing line data."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                UPDATE picks SET
+                    closing_line = ?,
+                    closing_odds = ?,
+                    clv_line = ?,
+                    clv_odds = ?
+                WHERE id = ?
+            """, (closing_line, closing_odds, clv_line, clv_odds, pick_id))
+            conn.commit()
+
+    def get_picks_for_clv_update(self) -> list[PickRecord]:
+        """Get picks that need CLV update (no closing line yet, game today or past)."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("""
+                SELECT * FROM picks
+                WHERE closing_line = 0 AND game_date <= datetime('now')
+                ORDER BY game_date
+            """).fetchall()
+            return [self._row_to_pick(row) for row in rows]
+
+    def get_clv_metrics(self) -> dict:
+        """Calculate CLV performance metrics."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+
+            # Overall CLV stats
+            stats = conn.execute("""
+                SELECT
+                    COUNT(*) as total_with_clv,
+                    AVG(clv_line) as avg_clv_line,
+                    AVG(clv_odds) as avg_clv_odds,
+                    SUM(CASE WHEN clv_line > 0 THEN 1 ELSE 0 END) as positive_clv_count,
+                    SUM(CASE WHEN clv_odds > 0 THEN 1 ELSE 0 END) as beat_closing_count
+                FROM picks
+                WHERE closing_line != 0 AND should_bet = 1
+            """).fetchone()
+
+            # By confidence
+            by_conf = conn.execute("""
+                SELECT
+                    confidence,
+                    COUNT(*) as total,
+                    AVG(clv_line) as avg_clv_line,
+                    AVG(clv_odds) as avg_clv_odds
+                FROM picks
+                WHERE closing_line != 0 AND should_bet = 1
+                GROUP BY confidence
+            """).fetchall()
+
+            return {
+                "overall": dict(stats) if stats else {},
+                "by_confidence": [dict(r) for r in by_conf]
+            }
+
+    # ===== Migration for existing databases =====
+
+    def migrate_schema(self):
+        """Add missing columns to existing database."""
+        with sqlite3.connect(self.db_path) as conn:
+            # Get existing columns
+            cursor = conn.execute("PRAGMA table_info(picks)")
+            existing_cols = {row[1] for row in cursor.fetchall()}
+
+            # Columns to add if missing
+            new_columns = [
+                ("is_shadow", "INTEGER DEFAULT 0"),
+                ("filter_reason", "TEXT DEFAULT ''"),
+                ("opening_line", "REAL DEFAULT 0.0"),
+                ("opening_odds", "INTEGER DEFAULT 0"),
+                ("closing_line", "REAL DEFAULT 0.0"),
+                ("closing_odds", "INTEGER DEFAULT 0"),
+                ("clv_line", "REAL DEFAULT 0.0"),
+                ("clv_odds", "REAL DEFAULT 0.0"),
+                ("ml_probability", "REAL DEFAULT 0.0"),
+                ("injury_impact", "REAL DEFAULT 0.0"),
+            ]
+
+            for col_name, col_type in new_columns:
+                if col_name not in existing_cols:
+                    conn.execute(f"ALTER TABLE picks ADD COLUMN {col_name} {col_type}")
+                    print(f"  Added column: {col_name}")
+
+            conn.commit()
+
     def _row_to_pick(self, row: sqlite3.Row) -> PickRecord:
         """Convert a database row to a PickRecord."""
+        # Handle both old and new schema
+        def safe_get(key, default=None):
+            try:
+                return row[key]
+            except (IndexError, KeyError):
+                return default
+
         return PickRecord(
             id=row['id'],
             created_at=row['created_at'],
@@ -264,6 +501,19 @@ class Database:
             favorite_b2b=bool(row['favorite_b2b']),
             favorite_rest=row['favorite_rest'],
             favorite_form=row['favorite_form'],
+            # v0.8.0 fields
+            is_shadow=safe_get('is_shadow', 0) or 0,
+            filter_reason=safe_get('filter_reason', '') or '',
+            # v0.9.0 CLV fields
+            opening_line=safe_get('opening_line', 0.0) or 0.0,
+            opening_odds=safe_get('opening_odds', 0) or 0,
+            closing_line=safe_get('closing_line', 0.0) or 0.0,
+            closing_odds=safe_get('closing_odds', 0) or 0,
+            clv_line=safe_get('clv_line', 0.0) or 0.0,
+            clv_odds=safe_get('clv_odds', 0.0) or 0.0,
+            # v0.9.0 ML fields
+            ml_probability=safe_get('ml_probability', 0.0) or 0.0,
+            injury_impact=safe_get('injury_impact', 0.0) or 0.0,
         )
 
 

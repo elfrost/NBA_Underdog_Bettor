@@ -16,8 +16,8 @@ from src.bankroll import get_bankroll_manager
 # App setup
 app = FastAPI(
     title="NBA Underdog Bet",
-    description="AI-powered NBA underdog betting analysis dashboard",
-    version="0.8.0",
+    description="AI-powered NBA underdog betting analysis with ML predictions",
+    version="0.9.0",
 )
 
 # Paths
@@ -77,6 +77,7 @@ async def dashboard(request: Request):
 
     # Get overall metrics
     db_metrics = db.get_metrics()
+    shadow_metrics = db.get_shadow_metrics()
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
@@ -88,6 +89,7 @@ async def dashboard(request: Request):
         "kelly_adjustment": ctx["kelly_adjustment"],
         "picks": today_picks,
         "metrics": db_metrics,
+        "shadow_metrics": shadow_metrics,
         "performance": metrics,
         "now": datetime.now(),
     })
@@ -182,6 +184,59 @@ async def analytics_page(request: Request):
         "results": results,
         "metrics": metrics,
         "calibration": calibration,
+        "now": datetime.now(),
+    })
+
+
+# ============== v0.9.0 PAGES ==============
+
+@app.get("/clv", response_class=HTMLResponse)
+async def clv_page(request: Request):
+    """CLV Analysis page."""
+    settings = get_settings()
+    bankroll_mgr = get_bankroll_manager()
+    ctx = bankroll_mgr.get_bankroll_context()
+
+    return templates.TemplateResponse("clv.html", {
+        "request": request,
+        "page": "clv",
+        "settings": settings,
+        "risk_level": ctx["risk_level"].value,
+        "dynamic_kelly": ctx["dynamic_kelly"],
+        "now": datetime.now(),
+    })
+
+
+@app.get("/ml", response_class=HTMLResponse)
+async def ml_page(request: Request):
+    """ML Model page."""
+    settings = get_settings()
+    bankroll_mgr = get_bankroll_manager()
+    ctx = bankroll_mgr.get_bankroll_context()
+
+    return templates.TemplateResponse("ml.html", {
+        "request": request,
+        "page": "ml",
+        "settings": settings,
+        "risk_level": ctx["risk_level"].value,
+        "dynamic_kelly": ctx["dynamic_kelly"],
+        "now": datetime.now(),
+    })
+
+
+@app.get("/calibration", response_class=HTMLResponse)
+async def calibration_page(request: Request):
+    """Calibration settings page."""
+    settings = get_settings()
+    bankroll_mgr = get_bankroll_manager()
+    ctx = bankroll_mgr.get_bankroll_context()
+
+    return templates.TemplateResponse("calibration.html", {
+        "request": request,
+        "page": "calibration",
+        "settings": settings,
+        "risk_level": ctx["risk_level"].value,
+        "dynamic_kelly": ctx["dynamic_kelly"],
         "now": datetime.now(),
     })
 
@@ -308,6 +363,177 @@ async def api_shadow_analysis():
         ],
         "conclusion": "Si shadow_bets.win_rate > real_bets.win_rate, les filtres sont TROP restrictifs!"
     })
+
+
+# ============== v0.9.0 API ENDPOINTS ==============
+
+@app.get("/api/clv-analysis")
+async def api_clv_analysis():
+    """v0.9.0: Get CLV (Closing Line Value) analysis."""
+    db = get_db()
+    clv_metrics = db.get_clv_metrics()
+
+    # Calculate interpretation
+    overall = clv_metrics.get("overall", {})
+    avg_clv_line = overall.get("avg_clv_line", 0) or 0
+    avg_clv_odds = overall.get("avg_clv_odds", 0) or 0
+
+    if overall.get("total_with_clv", 0) > 0:
+        interpretation = []
+        if avg_clv_line > 0.5:
+            interpretation.append(f"Excellent: +{avg_clv_line:.1f} pts CLV on average")
+        elif avg_clv_line > 0:
+            interpretation.append(f"Good: +{avg_clv_line:.1f} pts CLV on average")
+        else:
+            interpretation.append(f"Poor: {avg_clv_line:.1f} pts CLV on average")
+
+        if avg_clv_odds > 0.02:
+            interpretation.append(f"Beating closing odds by {avg_clv_odds*100:.1f}%")
+        elif avg_clv_odds < -0.02:
+            interpretation.append(f"Behind closing odds by {abs(avg_clv_odds)*100:.1f}%")
+
+        clv_metrics["interpretation"] = " | ".join(interpretation)
+    else:
+        clv_metrics["interpretation"] = "No CLV data yet - will populate after games start"
+
+    return JSONResponse(clv_metrics)
+
+
+@app.get("/api/calibration")
+async def api_calibration():
+    """v0.9.0: Get auto-calibration analysis."""
+    try:
+        from src.services.auto_calibration import AutoCalibrator
+        calibrator = AutoCalibrator()
+        result = calibrator.calculate_optimal_calibration()
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)})
+
+
+@app.post("/api/calibration/update")
+async def api_update_calibration():
+    """v0.9.0: Update calibration factor based on analysis."""
+    try:
+        from src.services.auto_calibration import AutoCalibrator
+        calibrator = AutoCalibrator()
+        result = calibrator.update_calibration()
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/ml/info")
+async def api_ml_info():
+    """v0.9.0: Get ML model information."""
+    try:
+        from src.ml.model import UnderdogPredictor
+        predictor = UnderdogPredictor()
+        return JSONResponse(predictor.get_model_info())
+    except Exception as e:
+        return JSONResponse({"error": str(e), "is_trained": False})
+
+
+@app.post("/api/ml/train")
+async def api_ml_train(force: bool = Query(False)):
+    """v0.9.0: Train or retrain the ML model."""
+    try:
+        from src.ml.model import UnderdogPredictor
+        predictor = UnderdogPredictor()
+        result = predictor.train(force=force)
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e), "status": "failed"}, status_code=500)
+
+
+@app.get("/api/ml/features")
+async def api_ml_features():
+    """v0.9.0: Get feature statistics and importance."""
+    try:
+        from src.ml.features import FeatureExtractor
+        from src.ml.model import UnderdogPredictor
+
+        extractor = FeatureExtractor()
+        predictor = UnderdogPredictor()
+
+        stats = extractor.get_feature_stats()
+        importance = predictor.get_feature_importance()
+
+        return JSONResponse({
+            "feature_stats": stats,
+            "feature_importance": importance
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)})
+
+
+@app.get("/api/line-movement")
+async def api_line_movement():
+    """v0.9.0: Get line movement analysis for all tracked games."""
+    try:
+        from src.services.line_movement import LineMovementTracker
+        from src.api.odds import OddsAPIClient
+        settings = get_settings()
+
+        # Create tracker (won't need to fetch, just analyze stored data)
+        odds_client = OddsAPIClient(settings.odds_api_key)
+        tracker = LineMovementTracker(odds_client)
+
+        movements = tracker.get_all_movements()
+        rlm_alerts = tracker.get_rlm_alerts()
+
+        return JSONResponse({
+            "movements": movements,
+            "rlm_alerts": rlm_alerts,
+            "total_tracked": len(movements)
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)})
+
+
+@app.get("/api/picks")
+async def api_picks_filtered(
+    filter_type: Optional[str] = Query("all", description="all, real, or shadow"),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+):
+    """v0.9.0: Get picks with filtering options."""
+    import sqlite3
+    db = get_db()
+
+    with sqlite3.connect(db.db_path) as conn:
+        conn.row_factory = sqlite3.Row
+
+        # Build query
+        conditions = []
+        params = []
+
+        if filter_type == "real":
+            conditions.append("(p.is_shadow = 0 OR p.is_shadow IS NULL)")
+        elif filter_type == "shadow":
+            conditions.append("p.is_shadow = 1")
+
+        if date_from:
+            conditions.append("date(p.game_date) >= ?")
+            params.append(date_from)
+
+        if date_to:
+            conditions.append("date(p.game_date) <= ?")
+            params.append(date_to)
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+        query = f"""
+            SELECT p.*, r.result, r.profit_loss, r.home_score, r.away_score
+            FROM picks p
+            LEFT JOIN results r ON p.id = r.pick_id
+            WHERE {where_clause}
+            ORDER BY p.game_date DESC
+        """
+
+        rows = conn.execute(query, params).fetchall()
+
+    return JSONResponse([dict(row) for row in rows])
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8000):
